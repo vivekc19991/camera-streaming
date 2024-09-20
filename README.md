@@ -38,13 +38,13 @@ To properly start the WebRTC streaming process and call the HTML page, several p
 When calling the `index.html` page, the following parameters need to be included in the URL query string:
 
 ```
-https://yourdomain.com/index.html?accessToken=<your_access_token>&refreshToken=<your_refresh_token>&clientId=<your_client_id>&clientSecret=<your_client_secret>&projectId=<your_project_id>&deviceId=<your_device_id>
+https://bar-streaming.s3.amazonaws.com/index.html?accessToken=<your_access_token>&refreshToken=<your_refresh_token>&clientId=<your_client_id>&clientSecret=<your_client_secret>&projectId=<your_project_id>&deviceId=<your_device_id>
 ```
 
 ### Example:
 
 ```plaintext
-https://yourdomain.com/index.html?accessToken=ya29.a0Af...&refreshToken=1//0g...&clientId=1234567890-abcdef.apps.googleusercontent.com&clientSecret=GOCSPX...&projectId=my-google-cloud-project&deviceId=device1234
+https://bar-streaming.s3.amazonaws.com/index.html?accessToken=ya29.a0Af...&refreshToken=1//0g...&clientId=1234567890-abcdef.apps.googleusercontent.com&clientSecret=GOCSPX...&projectId=my-google-cloud-project&deviceId=device1234
 ```
 
 ### URL Breakdown:
