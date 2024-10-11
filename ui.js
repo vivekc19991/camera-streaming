@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-
+let currentStreamUI;
 /// UI Controller Functions - Buttons ///
 
 function clickSignIn() {
@@ -118,7 +118,7 @@ function clickExtendStream_WebRTC() {
 
 function clickStopStream_WebRTC() {
   pushLog(LogType.ACTION, "Stop Stream", "Initiating Stop Camera Stream call to Device Access API");
-  onStopStream_WebRTC();
+  onStopStream_WebRTC(currentStreamUI);
 }
 
 /** clickClearLogs - Clears the list of logs, and the selected log */
@@ -199,10 +199,15 @@ function updateServiceAccountKey(value) {
 
 function updateOfferSDP(value) {
   offerSDP = value;
+  console.log(offerSDP,'offerSDPofferSDP');
+  
   // document.getElementById("txtOfferSDPCamera").value = offerSDP;
   // document.getElementById("txtOfferSDPDoorbell").value = offerSDP;
 }
-
+function sendStreamIndexToUI(streamIndex){
+  console.log(streamIndex,'{{{{{{{{{{{{{{{{{{{{{');
+  currentStreamUI = streamIndex;
+}
 function updateStreamExtensionToken(value) {
   streamExtensionToken = value;
   // document.getElementById("txtExtensionToken1").value = streamExtensionToken;

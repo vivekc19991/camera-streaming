@@ -17,13 +17,13 @@ limitations under the License.
 
 // Device Access Variables:
 let streamExtensionToken = "";
-
+let currentStreamingIndex;
 // let accessToken="ya29.a0AXooCguxzaDv9kI6YZjqsmglGlPT3A8usb3GhZ4-46UmtN9_LBp1TclT9swr5cYi1nPJYRfVj6BcDdTUVNUH0HvQO7W-rsyWkf_FzUoB3_IZHRQPOxdKI41-_WLj3miMNvbbXP0gBwJY2870AI57g59P6eHRWhT9PCLbaCgYKAbASARESFQHGX2Mitxa1BZdGZwuJNcEQ2fDtIQ0171"
 /** deviceAccessRequest - Issues requests to Device Access Rest API */
-function deviceAccessRequest(method, call, localpath, payload = "",access_token) {
+function deviceAccessRequest(method, call, localpath, payload = "",access_token,mediaStream) {
   let xhr = new XMLHttpRequest();
+  currentStreamingIndex = mediaStream;
   xhr.open(method, selectedAPI + localpath);
-  console.log("accessToke ")
   xhr.setRequestHeader('Authorization', 'Bearer '+access_token);
   xhr.setRequestHeader('Content-Type', 'application/json; charset=UTF-8');
 
@@ -31,7 +31,9 @@ function deviceAccessRequest(method, call, localpath, payload = "",access_token)
     if(xhr.status === 200) {
       let responsePayload = "* Payload: \n" + xhr.response;
       pushLog(LogType.HTTP, method + " Response", responsePayload);
-      deviceAccessResponse(method, call, xhr.response);
+      console.log(mediaStream,'mediaStreammediaStream========');
+      
+      deviceAccessResponse(method, call, xhr.response,mediaStream);
     } else {
       toastr.error(xhr.responseText);
       pushError(LogType.HTTP, method + " Response", xhr.responseText);
@@ -52,7 +54,7 @@ function deviceAccessRequest(method, call, localpath, payload = "",access_token)
 }
 
 /** deviceAccessResponse - Parses responses from Device Access API calls */
-function deviceAccessResponse(method, call, response) {
+function deviceAccessResponse(method, call, response,mediaStream) {
   pushLog(LogType.HTTP, method + " Response", response);
   let data = JSON.parse(response);
   // Check if response data is empty:
@@ -130,23 +132,44 @@ function deviceAccessResponse(method, call, response) {
       console.log("List Structures!");
       break;
     case 'generateStream':
-      document.getElementById("video-stream").removeAttribute("hidden");
+      // document.getElementById("video-stream").removeAttribute("hidden");
       timestampGenerateStreamResponse = new Date();
       updateAnalytics();
       console.log(`Generate Stream response - `, timestampGenerateStreamResponse);
       if(data["results"] && (data["results"].hasOwnProperty("streamExtensionToken") || data["results"].hasOwnProperty("mediaSessionId")))
         updateStreamExtensionToken(data["results"].streamExtensionToken || data["results"].mediaSessionId);
       if(data["results"] && data["results"].hasOwnProperty("answerSdp")) {
-        updateWebRTC(data["results"].answerSdp);
+        updateWebRTC(data["results"].answerSdp,mediaStream);
         pushLog(LogType.ACTION, "[Video Stream]", "");
       }
       break;
+    // case 'generateStream2':
+    //   console.log('stream2');
+      
+    //   // document.getElementById("video-stream2").removeAttribute("hidden");
+    //   timestampGenerateStreamResponse = new Date();
+    //   updateAnalytics2();
+    //   console.log(`Generate Stream response - `, timestampGenerateStreamResponse);
+    //   if(data["results"] && (data["results"].hasOwnProperty("streamExtensionToken") || data["results"].hasOwnProperty("mediaSessionId")))
+    //     updateStreamExtensionToken2(data["results"].streamExtensionToken || data["results"].mediaSessionId);
+    //   if(data["results"] && data["results"].hasOwnProperty("answerSdp")) {
+    //     updateWebRTC2(data["results"].answerSdp);
+    //     pushLog(LogType.ACTION, "[Video Stream]", "");
+    //   }
+    //   break;
     case 'refreshStream':
       timestampExtendStreamResponse = new Date();
       updateAnalytics();
       console.log(`Refresh Stream response - `, timestampExtendStreamResponse);
       if(data["results"] && (data["results"].hasOwnProperty("streamExtensionToken") || data["results"].hasOwnProperty("mediaSessionId")))
         updateStreamExtensionToken(data["results"].streamExtensionToken || data["results"].mediaSessionId);
+      break;
+    case 'refreshStream2':
+      timestampExtendStreamResponse = new Date();
+      updateAnalytics2();
+      console.log(`Refresh Stream response - `, timestampExtendStreamResponse);
+      if(data["results"] && (data["results"].hasOwnProperty("streamExtensionToken") || data["results"].hasOwnProperty("mediaSessionId")))
+        updateStreamExtensionToken2(data["results"].streamExtensionToken || data["results"].mediaSessionId);
       break;
     case 'stopStream':
       timestampStopStreamResponse = new Date();
@@ -281,6 +304,18 @@ function onGenerateStream() {
   };
   deviceAccessRequest('POST', 'generateStream', endpoint, payload);
 }
+function onGenerateStream2() {
+  clearAnalytics(true);
+  timestampGenerateStreamRequest = new Date();
+  updateAnalytics();
+  console.log(`onGenerateStream() - `, timestampGenerateStreamRequest);
+
+  let endpoint = "/enterprises/" + projectId + "/devices/" + selectedDevice.id2 + ":executeCommand";
+  let payload = {
+    "command": "sdm.devices.commands.CameraLiveStream.GenerateRtspStream"
+  };
+  deviceAccessRequest('POST', 'generateStream2', endpoint, payload);
+}
 
 /** onExtendStream - Issues a ExtendRtspStream request */
 function onExtendStream() {
@@ -349,31 +384,39 @@ async function getAccessToken(client_id,client_secret,refresh_token) {
 // Call the function to get a new access token
 
 /** onGenerateStream_WebRTC - Issues a GenerateWebRtcStream request */
-async function onGenerateStream_WebRTC() {
+async function onGenerateStream_WebRTC(urlParamsForAccessToken,mediaStream) {
   // Get the full URL
-var url = window.location.href;
+// var url = window.location.href;
 
-// Create a URL object
-var urlObj = new URL(url);
+// // Create a URL object
+// var urlObj = new URL(url);
 
-// Use URLSearchParams to extract the parameters
-var params = new URLSearchParams(urlObj.search);
+// // Use URLSearchParams to extract the parameters
+// var params = new URLSearchParams(urlObj.search);
 
-// Get the access token and assign it to a variable
-var accessToken = params.get('accessToken');
-var refreshToken = params.get('refreshToken');
-var clientId = params.get('clientId');
-var secret = params.get('secret');
-var projectIds=params.get('projectId')
+// // Get the access token and assign it to a variable
+console.log(urlParamsForAccessToken,'urlParamsForAccessToken');
+var accessToken = urlParamsForAccessToken.get('accessToken');
+var refreshToken = urlParamsForAccessToken.get('refreshToken');
+var clientId = urlParamsForAccessToken.get('clientId');
+var secret = urlParamsForAccessToken.get('secret');
+var projectIds=urlParamsForAccessToken.get('projectId')
 // Get the id and assign it to a variable
-var id = params.get('id');
+var idsParam = urlParamsForAccessToken.get('id');
+const idsArray = idsParam.split(',');
+const id = idsArray[mediaStream];
+console.log(id,'ididid');
+console.log(id,mediaStream,'++++++++++++++++++++++++++');
+
+// id='AVPHwEuxrJHT2VNoW77NLuxWXXqJsWUjF-Vn1PaItSyH0gr3XhdVgTgnKat8LnWtTeJNV0DI9nGxPUlJ-OaM-RU3DXNT0Q'
 let new_access
 try {
   new_access =await getAccessToken(clientId,secret,refreshToken)
 } catch (error) {
-  console.loge(error)
+  console.log(error)
 }
 
+console.log(offerSDP,'offerSDPofferSDPofferSDP');
 
 
 
@@ -392,8 +435,54 @@ console.log("ID: " + id);
     }
   };
 
-  deviceAccessRequest('POST', 'generateStream', endpoint, payload,new_access);
+  deviceAccessRequest('POST', 'generateStream', endpoint, payload,new_access,mediaStream);
 }
+// async function onGenerateStream_WebRTC2() {
+//   // Get the full URL
+// var url = window.location.href;
+
+// // Create a URL object
+// var urlObj = new URL(url);
+
+// // Use URLSearchParams to extract the parameters
+// var params = new URLSearchParams(urlObj.search);
+
+// // Get the access token and assign it to a variable
+// var accessToken = params.get('accessToken');
+// var refreshToken = params.get('refreshToken');
+// var clientId = params.get('clientId');
+// var secret = params.get('secret');
+// var projectIds=params.get('projectId')
+// // Get the id and assign it to a variable
+// var id2 = params.get('id');
+// id2='AVPHwEuxrJHT2VNoW77NLuxWXXqJsWUjF-Vn1PaItSyH0gr3XhdVgTgnKat8LnWtTeJNV0DI9nGxPUlJ-OaM-RU3DXNT0Q'
+// let new_access
+// try {
+//   new_access =await getAccessToken(clientId,secret,refreshToken)
+// } catch (error) {
+//   console.log(error)
+// }
+
+
+
+
+// console.log("Access Token: " + new_access);
+// console.log("ID: " + id2);
+//   clearAnalytics(true);
+//   timestampGenerateWebRtcStreamRequest = new Date();
+//   updateAnalytics();
+//   console.log(`onGenerateStream_WebRTC() - `, timestampGenerateWebRtcStreamRequest);
+
+//   let endpoint = "/enterprises/" + projectIds + "/devices/" + id2 + ":executeCommand";
+//   let payload = {
+//     "command": "sdm.devices.commands.CameraLiveStream.GenerateWebRtcStream",
+//     "params": {
+//       "offerSdp": offerSDP
+//     }
+//   };
+
+//   deviceAccessRequest('POST', 'generateStream2', endpoint, payload,new_access);
+// }
 
 /** onExtendStream_WebRTC - Issues a ExtendWebRtcStream request */
 function onExtendStream_WebRTC() {
@@ -410,9 +499,25 @@ function onExtendStream_WebRTC() {
   };
   deviceAccessRequest('POST', 'refreshStream', endpoint, payload);
 }
+// function onExtendStream_WebRTC2() {
+//   timestampExtendWebRtcStreamRequest = new Date();
+//   updateAnalytics();
+//   console.log(`onExtendStream_WebRTC() - `, timestampExtendWebRtcStreamRequest);
+
+//   let endpoint = "/enterprises/" + projectId + "/devices/" + selectedDevice.id2 + ":executeCommand";
+//   let payload = {
+//     "command": "sdm.devices.commands.CameraLiveStream.ExtendWebRtcStream",
+//     "params": {
+//       "mediaSessionId" : streamExtensionToken
+//     }
+//   };
+//   deviceAccessRequest('POST', 'refreshStream2', endpoint, payload);
+// }
 
 /** onStopStream_WebRTC - Issues a StopWebRtcStream request */
-function onStopStream_WebRTC() {
+function onStopStream_WebRTC(currentStreamUI) {
+  console.log(currentStreamUI,'currentStreamUIcurrentStreamUI');
+  
   timestampStopWebRtcStreamRequest = new Date();
   updateAnalytics();
   console.log(`onStopStream_WebRTC() - `, timestampStopWebRtcStreamRequest);
@@ -424,5 +529,5 @@ function onStopStream_WebRTC() {
       "mediaSessionId" : streamExtensionToken
     }
   };
-  deviceAccessRequest('POST', 'stopStream', endpoint, payload);
+  deviceAccessRequest('POST', 'stopStream', endpoint, payload,currentStreamUI);
 }

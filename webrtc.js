@@ -16,13 +16,15 @@ limitations under the License.
 
 
 // WebRTC Variables:
-let localPeerConnection;
-let localSendChannel;
-let localStream;
-let remoteStream;
-let offerSDP = "";
+let localPeerConnection=[];
+let localSendChannel=[];
+let localStream=[];
+let remoteStream=[];
+let offerSDP =[];
 let initialized = false;
-let videoElement;
+let videoElement=[];
+let videoElementId='';
+let urlParamsForAccessToken={};
 
 
 // WebRTC Configurations:
@@ -48,110 +50,127 @@ let timestampSetLocalDescription;
 let timestampSetLocalDescriptionSuccess;
 
 // Camera Stream button pressed
-let timestampGenerateStreamRequest;
-let timestampGenerateWebRtcStreamRequest; // senderSdpOffer
-let timestampGenerateStreamResponse; // sendSdpOffer success / timestampSdpAnswerReceived
-let timestampExtendStreamRequest;
-let timestampExtendWebRtcStreamRequest;
-let timestampExtendStreamResponse;
-let timestampStopStreamRequest;
-let timestampStopWebRtcStreamRequest;
-let timestampStopStreamResponse;
+// let timestampGenerateStreamRequest;
+// let timestampGenerateWebRtcStreamRequest; // senderSdpOffer
+// let timestampGenerateStreamResponse; // sendSdpOffer success / timestampSdpAnswerReceived
+// let timestampExtendStreamRequest;
+// let timestampExtendWebRtcStreamRequest;
+// let timestampExtendStreamResponse;
+// let timestampStopStreamRequest;
+// let timestampStopWebRtcStreamRequest;
+// let timestampStopStreamResponse;
 let timestampSetRemoteDescription;
 let timestampSetRemoteDescriptionSuccess;
-let timestampConnected;
-let timestampPlaybackStarted;
+// let timestampConnected;
+// let timestampPlaybackStarted;
 
 
 /// WebRTC Functions ///
 
 /** initializeWebRTC - Triggers starting a new WebRTC stream on initialization */
-function initializeWebRTC() {
-  if(initialized===true)
-    return;
-  timestampInitializeWebRTC = new Date();
-  // updateAnalytics();
-  console.log(`initializeWebRTC() - `, timestampInitializeWebRTC);
+function initializeWebRTC(params, videoElementToStream) {
+  let idsParam = params.get('id');
+  if (idsParam) {
+    const idsArray = idsParam.split(',');
+    urlParamsForAccessToken = params;
+    // Removed the 'initialized' check here to avoid blocking further iterations
 
-  videoElement = document.getElementById('video-stream');
-  videoElement.addEventListener('play', (event) => {
-    timestampPlaybackStarted = new Date();
-    updateAnalytics();
-    console.log('playback started - ', timestampPlaybackStarted);
+    for (let stream = 0; stream < idsArray.length; stream++) {  // Ensure loop runs for each stream
+      if (idsArray[stream] !== null && idsArray[stream] !== undefined) {
+        const videoElementId = videoElementToStream[stream];
+        const videoElement = document.getElementById(videoElementId);
+
+        if (videoElement) {
+          videoElement.addEventListener('play', (event) => {
+            updateAnalytics(); // Assuming analytics are updated when playback starts
+          });
+
+          // Use setTimeout to delay execution of each stream after the 1st one
+          const delay = stream === 0 ? 0 : stream * 5000;  // No delay for 1st stream, 10 sec for others
+
+          setTimeout(() => {
+            sendStreamIndexToUI(stream)
+            startLocalStream(stream, videoElementToStream); // Initialize stream here
+          }, delay);
+
+        } else {
+          console.error(`Video element with ID ${videoElementId} not found.`);
+        }
+      }
+    }
+  }
+}
+
+function startLocalStream(mediaStreamIndex, videoElementToStream) {
+  const timestampStartLocalStream = new Date();
+
+  const servers = { 'sdpSemantics': 'unified-plan', 'iceServers': [] };
+  
+  // Initialize the peer connection for this mediaStreamIndex
+  remoteStream[mediaStreamIndex] = new MediaStream();
+  localPeerConnection[mediaStreamIndex] = new RTCPeerConnection(servers);
+    
+  // Log to confirm peer connection creation for each stream
+  console.log(`Created peer connection for stream index ${mediaStreamIndex}`, localPeerConnection[mediaStreamIndex]);
+
+  localPeerConnection[mediaStreamIndex].ondatachannel = receiveChannelCallback;
+  localSendChannel[mediaStreamIndex] = localPeerConnection[mediaStreamIndex].createDataChannel('dataSendChannel', null);
+  
+  localPeerConnection[mediaStreamIndex].addEventListener('iceconnectionstatechange', handleConnectionChange);
+
+  // Log the mediaStreamIndex when track event is added
+  localPeerConnection[mediaStreamIndex].addEventListener('track', (event) => {
+    gotRemoteMediaTrack(event, videoElementToStream[mediaStreamIndex], mediaStreamIndex);
   });
 
-  initialized = true;
-  startLocalStream();
+  // Create the offer and log the process for debugging
+  localPeerConnection[mediaStreamIndex].createOffer(localOfferOptions)
+  .then((offer) => {
+    createdOffer(offer, mediaStreamIndex);
+  })
+  .catch(setSessionDescriptionError);
 }
+function gotRemoteMediaTrack(event, streamElement, mediaStreamIndex) {
+  console.log(`gotRemoteMediaTrack() called for mediaStreamIndex: ${mediaStreamIndex}`);
+  
+  // Log the received track
+  console.log(`Received track for mediaStreamIndex: ${mediaStreamIndex}`, event.track);
 
-/** startLocalStream - Starts a WebRTC stream on the browser */
-function startLocalStream(mediaStream) {
-  timestampStartLocalStream = new Date();
-  // updateAnalytics();
-  console.log(`startLocalStream() - `, timestampStartLocalStream);
-  localPeerConnection = null;
-  localSendChannel = null;
-  localStream = null;
-  offerSDP = "";
-
-  remoteStream = new MediaStream();
-
-  const servers = { 'sdpSemantics': 'unified-plan', 'iceServers': []  };
-  localPeerConnection = new RTCPeerConnection(servers);
-  localPeerConnection.ondatachannel = receiveChannelCallback;
-
-  localSendChannel = localPeerConnection.createDataChannel('dataSendChannel', null);
-  localPeerConnection.addEventListener('iceconnectionstatechange', handleConnectionChange);
-
-  if(mediaStream) {
-    mediaStream.getTracks().forEach((track) => {
-      localPeerConnection.addTrack(track, mediaStream);
-      console.log(`track added!`);
-    });
-    localStream = mediaStream;
+  remoteStream[mediaStreamIndex].addTrack(event.track);
+  const videoElement = document.getElementById(streamElement);
+  
+  if (videoElement) {
+    videoElement.srcObject = remoteStream[mediaStreamIndex];
+    console.log(`Remote stream set for mediaStreamIndex: ${mediaStreamIndex}`);
+  } else {
+    console.error(`Video element with ID ${streamElement} not found.`);
   }
-
-  localPeerConnection.addEventListener('track', gotRemoteMediaTrack);
-
-  timestampCreateSdpOffer = new Date();
-  // updateAnalytics();
-  console.log('localPeerConnection createOffer start - ', timestampCreateSdpOffer);
-  localPeerConnection.createOffer(localOfferOptions)
-      .then(createdOffer).catch(setSessionDescriptionError);
-      
 }
-
 /** createdOffer - Handles local offerSDP creation */
-function createdOffer(description) {
+function createdOffer(description, mediaStreamIndex) {
+  updateOfferSDP(description.sdp); 
 
-  timestampCreateSdpOfferSuccess = new Date();
-  // updateAnalytics();
-  console.log(`createdOffer() - `, timestampCreateSdpOfferSuccess);
-  updateOfferSDP(description.sdp);
   timestampSetLocalDescription = new Date();
-  // updateAnalytics();
+  updateAnalytics();
   console.log(`setLocalDescription() - `, timestampSetLocalDescription);
-  localPeerConnection.setLocalDescription(description)
-      .then(() => {
-        setLocalDescriptionSuccess(localPeerConnection);
-      }).catch(setSessionDescriptionError);
-      
+
+  // Set the local description for the specific peer connection
+  localPeerConnection[mediaStreamIndex].setLocalDescription(description)
+    .then(() => {
+      setLocalDescriptionSuccess(localPeerConnection[mediaStreamIndex],mediaStreamIndex);
+    })
+    .catch(setSessionDescriptionError);
 }
 
 /** updateWebRTC - Updates WebRTC connection on receiving answerSDP */
-function updateWebRTC(answerSDP) {
-  console.log(`Answer from remotePeerConnection:\n${answerSDP} - `);
-  if (answerSDP[answerSDP.length - 1] !== '\n') {
-    answerSDP += '\n';
-  }
-
-  timestampSetRemoteDescription = new Date();
-  updateAnalytics();
-  console.log(`setRemoteDescription() - `, timestampSetRemoteDescription);
-  localPeerConnection.setRemoteDescription({ "type": "answer", "sdp": answerSDP })
-      .then(() => {
-        setRemoteDescriptionSuccess(localPeerConnection);
-      }).catch(setSessionDescriptionError);
+function updateWebRTC(answerSDP, mediaStreamIndex) {
+  console.log(`SDP Answer for mediaStreamIndex: ${mediaStreamIndex}`, answerSDP);
+  
+  localPeerConnection[mediaStreamIndex].setRemoteDescription({ type: 'answer', sdp: answerSDP })
+    .then(() => {
+      setRemoteDescriptionSuccess(localPeerConnection[mediaStreamIndex]);
+    })
+    .catch(setSessionDescriptionError);
 }
 
 
@@ -162,14 +181,6 @@ function getPeerName(peerConnection) {
   console.log(`getPeerName()`);
   return (peerConnection === localPeerConnection) ?
       'localPeerConnection' : 'remotePeerConnection';
-}
-
-/** gotRemoteMediaTrack - Handles received media track */
-function gotRemoteMediaTrack(event) {
-  console.log(`gotRemoteMediaTrack()`);
-  remoteStream.addTrack(event.track);
-  document.getElementById("video-stream").srcObject = remoteStream;
-  console.log('Received remote track.');
 }
 
 /** receiveChannelCallback - Handles received channel callback */
@@ -187,12 +198,14 @@ function setDescriptionSuccess(peerConnection, functionName) {
 }
 
 /** setLocalDescriptionSuccess - Handles received local success description */
-function setLocalDescriptionSuccess(peerConnection) {
+function setLocalDescriptionSuccess(peerConnection,mediaStreamIndex) {
   timestampSetLocalDescriptionSuccess = new Date();
   updateAnalytics();
   console.log(`setLocalDescriptionSuccess() - `, timestampSetLocalDescriptionSuccess);
   setDescriptionSuccess(peerConnection, 'setLocalDescription');
-  onGenerateStream_WebRTC()
+  console.log(mediaStreamIndex,'mediaStreamIndex');
+  
+  onGenerateStream_WebRTC(urlParamsForAccessToken,mediaStreamIndex)
 }
 
 /** setRemoteDescriptionSuccess - Handles received remote success description */

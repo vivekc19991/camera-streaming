@@ -19,14 +19,226 @@ limitations under the License.
 let isSignedIn = false;
 let isSubscribed = false;
 let selectedDevice;
-
-
+let videoIdsList = []
+let devicesList=[]
+var deviceNames =[]
 /// Primary Functions ///
 
 /** init - Initializes the loaded javascript */
 async function init() {
-  initializeWebRTC()
- 
+  var url = window.location.href;
+
+  // Create a URL object
+  var urlObj = new URL(url);
+
+  // Use URLSearchParams to extract the parameters
+  var params = new URLSearchParams(urlObj.search);
+  let idsParam = params.get('id');
+  if (idsParam) {
+    devicesList = idsParam.split(',');
+    const createElementCount = devicesList.length
+    const container = document.getElementById('camera-panel');
+    let devices = params.get('devices')
+// Get the id and assign it to a variable
+    deviceNames = devices.split(',');
+    if(devicesList.length == 1){
+      const camera1 = createCameraElement(0);
+      container.appendChild(camera1);
+      container.style.height = 'auto';
+      console.log('hello');
+      container.classList.add('single-camera-container');
+      container.classList.remove('camera-container');
+    }else{
+      devicesList.forEach((element,index) => {
+        const camera1 = createCameraElement(index);
+        container.appendChild(camera1);
+        
+      });
+
+    }
+  }
+  if(videoIdsList){
+    // videoStream = ['video-stream','video-stream2']
+    initializeWebRTC(params, videoIdsList)
+    initPersonCount();
+
+  }
+  function captureScreenshot(deviceId, index) {
+    const video = document.getElementById(`video-stream${index}`); // Adjust the selector to match your video element
+    
+    let cameraId = deviceId
+    if (!video) {
+      console.error("Video element not found");
+      return;
+    }
+
+    // Ensure the video is loaded and ready
+    if (video.readyState >= 2) {
+      captureCanvasScreenshot(video,cameraId,index);
+    } else {
+      video.addEventListener("loadeddata", () =>
+        captureCanvasScreenshot(video,deviceId,index)
+      );
+    }
+  }
+
+  function captureCanvasScreenshot(video,deviceId,index) {
+    html2canvas(document.body).then(function (pageCanvas) {
+      const combinedCanvas = document.createElement("canvas");
+      const context = combinedCanvas.getContext("2d");
+
+      combinedCanvas.width = pageCanvas.width;
+      combinedCanvas.height = pageCanvas.height;
+
+      // Draw the page content first
+      context.drawImage(pageCanvas, 0, 0);
+
+      // Draw the video content on top (or adjust coordinates as needed)
+      context.drawImage(
+        video,
+        video.offsetLeft,
+        video.offsetTop,
+        video.offsetWidth,
+        video.offsetHeight
+      );
+      combinedCanvas.toBlob(function (blob) {
+        const url = URL.createObjectURL(blob);
+        detectPeople(blob,deviceId,index);
+      });
+    });
+  }
+
+  // Capture screenshot every 10 minutes
+  // setInterval(captureScreenshot, 10 * 60 * 1000);
+
+  function updatePeopleCount(deviceId, count, cameraIndex) {
+    // const baseUrl = "https://dev.api.barseen.com/"; // Replace with your actual base URL
+    const baseUrl = "https://api.barseen.com/"; // Replace with your actual base URL
+    const endpoint = `${baseUrl}/google-accounts/updatePeopleCount`;
+
+    const data = {
+      deviceId: deviceId,
+      count: count,
+    };
+    console.log(JSON.stringify(data));
+    fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(data),
+    })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(
+            "Network response was not ok " + response.statusText
+          );
+        }
+        return response.json();
+      })
+      .then((data) => {
+        console.log("Success:", data);
+        let crowdStatusElement = document.getElementById(
+          `crowd-status-${cameraIndex}`
+        )
+        let capacityElement =  document.getElementById(
+          `people-capacity-${cameraIndex}`
+        )
+        if(data.data.capacity !== null){
+          crowdStatusElement.innerText = `Crowd Status: ${data.data.crowdStatus}`;
+          capacityElement.innerText = `Capacity: ${data.data.capacity}`;
+          capacityElement.style.display ='block';
+          crowdStatusElement.style.display ='block';
+        }else{
+          capacityElement.style.display ='none';
+          crowdStatusElement.style.display ='none';
+        }
+      })
+      .catch((error) => {
+        console.error("There was a problem with the fetch operation:", error);
+      });
+  }
+
+  function initPersonCount() {
+    devicesList.forEach((element, index) => {
+      captureScreenshot(element, index);  // Immediate execution for each element
+    });
+  
+    // Then, set an interval to execute for all elements every 10 seconds
+    setInterval(() => {
+      devicesList.forEach((element, index) => {
+        captureScreenshot(element, index);  // Repeated execution after 10 seconds for each element
+      });
+    }, 60000); 
+  }
+  let model;
+  document.addEventListener("DOMContentLoaded", async () => {
+    model = await cocoSsd.load();
+  });
+
+  async function detectPeople(imageUrl,deviceId,cameraIndex) {
+   const count= await detectHeadCount(imageUrl)
+   console.log(count,'countcountcount');
+   
+    updatePeopleCount(deviceId, count,cameraIndex);
+    document.getElementById(
+      `person-count-${cameraIndex}`
+    ).innerText = `Persons detected: ${count}`;
+  }
+
+
+  async function detectHeadCount(imageBlob) {
+return new Promise(async (resolve, reject) => {
+  const apiKey = 'AIzaSyCxro996dikihRM3V5P4bAyb52Hrh_r_KQ';
+  const reader = new FileReader();
+
+  reader.onloadend = async () => {
+    const base64data = reader.result.split(',')[1]; // Extract the base64 encoded string
+
+    const requestBody = {
+      requests: [
+        {
+          image: {
+            content: base64data
+          },
+          features: [
+            {
+              type: 'OBJECT_LOCALIZATION',
+              maxResults: 50
+            }
+          ]
+        }
+      ]
+    };
+
+    try {
+      const response = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      const data = await response.json();
+      const objects = data.responses[0].localizedObjectAnnotations;
+      let headCount = 0;
+
+      objects?.forEach(object => {
+        if (object.name.toLowerCase() === 'person') {
+          headCount++;
+        }
+      });
+
+      resolve(headCount);
+    } catch (error) {
+      reject(error);
+    }
+  };
+
+  reader.readAsDataURL(imageBlob); // Read the image blob as a data URL
+});
+}
   readStorage();                // Reads data from browser's local storage if available
   // await handleAuth();           // Checks incoming authorization code from /auth path
   // await exchangeCode();         // Exchanges authorization code to an access token
@@ -35,6 +247,66 @@ async function init() {
   // onGenerateStream_WebRTC()
 }
 
+function createCameraElement(idSuffix) {
+  // Create the outer camera element div
+  const cameraElement = document.createElement('div');
+  const cameraInfo = document.createElement('div');
+  cameraElement.classList.add('camera-element');
+  cameraInfo.classList.add('camera-info');
+  cameraElement.style.display = 'block';
+  cameraInfo.style.display = 'flex';
+  cameraElement.id = `video-stream-div${idSuffix}`;
+  if(devicesList.length == 1){
+    cameraElement.classList.add('single-camera-element');
+    cameraElement.classList.remove('camera-element');
+
+  }
+
+    // Create the person count div
+    const personCount = document.createElement('div');
+    personCount.classList.add('person-count');
+    personCount.id = `person-count-${idSuffix}`;
+    personCount.textContent = 'Persons detected: 0';
+
+    // Create the crowdStatus div
+    const crowdStatus = document.createElement('div');
+    crowdStatus.classList.add('crowd-status');
+    crowdStatus.id = `crowd-status-${idSuffix}`;
+    crowdStatus.style.display ='none';
+    // crowdStatus.textContent = 'Crowd Status: ';
+    
+    // Create the crowdStatus div
+    const peopleCapacity = document.createElement('div');
+    peopleCapacity.classList.add('people-capacity');
+    peopleCapacity.id = `people-capacity-${idSuffix}`;
+    peopleCapacity.style.display ='none';
+    // peopleCapacity.textContent = 'People Capacity: ';
+
+    // Create the device name div
+    const deviceName = document.createElement('div');
+    deviceName.classList.add('devices');
+    deviceName.id = `device-name-${idSuffix}`;
+    deviceName.textContent = 'Camera: 0';
+    if(deviceNames){
+      deviceName.innerText = `Camera: ${deviceNames[idSuffix]}`;
+
+    }  // Create the video element
+    const video = document.createElement('video');
+    video.id = `video-stream${idSuffix}`;
+    video.setAttribute('autoplay', '');
+    video.setAttribute('playsinline', '');
+    video.setAttribute('controls', '');
+    videoIdsList.push(video.id)
+    // Append elements to the cameraElement div
+    cameraInfo.appendChild(personCount);
+    cameraInfo.appendChild(crowdStatus);
+    cameraInfo.appendChild(peopleCapacity);
+    cameraInfo.appendChild(deviceName);
+    cameraElement.appendChild(cameraInfo);
+    cameraElement.appendChild(video);
+
+  return cameraElement;
+}
 /** readStorage - Reads data from browser's local storage if available */
 function readStorage() {
 
