@@ -186,7 +186,7 @@ function captureCanvasScreenshot(video, deviceId, index) {
 
   async function detectHeadCount(imageBlob) {
 return new Promise(async (resolve, reject) => {
-  const apiKey = 'AIzaSyCxro996dikihRM3V5P4bAyb52Hrh_r_KQ';
+  const apiKey = '';
   const reader = new FileReader();
 
   reader.onloadend = async () => {
