@@ -79,12 +79,14 @@ function initializeWebRTC(params, videoElementToStream) {
       if (idsArray[stream] !== null && idsArray[stream] !== undefined) {
         const videoElementId = videoElementToStream[stream];
         const videoElement = document.getElementById(videoElementId);
-
+        videoElement.muted = true;
+        console.log(videoElement,'videoElement');
+        
         if (videoElement) {
-          videoElement.addEventListener('play', (event) => {
-            updateAnalytics(); // Assuming analytics are updated when playback starts
-          });
-
+          // videoElement.addEventListener('play', (event) => {
+          //   updateAnalytics(); // Assuming analytics are updated when playback starts
+          // });
+          videoElement.muted = true;
           // Use setTimeout to delay execution of each stream after the 1st one
           const delay = stream === 0 ? 0 : stream * 5000;  // No delay for 1st stream, 10 sec for others
 
@@ -141,6 +143,9 @@ function gotRemoteMediaTrack(event, streamElement, mediaStreamIndex) {
   
   if (videoElement) {
     videoElement.srcObject = remoteStream[mediaStreamIndex];
+    videoElement.addEventListener('play', (event) => {
+      updateAnalytics(); // Assuming analytics are updated when playback starts
+    });
     console.log(`Remote stream set for mediaStreamIndex: ${mediaStreamIndex}`);
   } else {
     console.error(`Video element with ID ${streamElement} not found.`);
@@ -169,6 +174,7 @@ function updateWebRTC(answerSDP, mediaStreamIndex) {
   localPeerConnection[mediaStreamIndex].setRemoteDescription({ type: 'answer', sdp: answerSDP })
     .then(() => {
       setRemoteDescriptionSuccess(localPeerConnection[mediaStreamIndex]);
+      videoElement.muted = true;
     })
     .catch(setSessionDescriptionError);
 }

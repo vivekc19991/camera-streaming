@@ -64,9 +64,9 @@ async function init() {
 
   }
   function captureScreenshot(deviceId, index) {
-    const video = document.getElementById(`video-stream${index}`); // Adjust the selector to match your video element
+    const video = document.getElementById(`video-stream${index}`);
+    let cameraId = deviceId;
     
-    let cameraId = deviceId
     if (!video) {
       console.error("Video element not found");
       return;
@@ -74,39 +74,33 @@ async function init() {
 
     // Ensure the video is loaded and ready
     if (video.readyState >= 2) {
-      captureCanvasScreenshot(video,cameraId,index);
+      captureCanvasScreenshot(video, cameraId, index);
     } else {
       video.addEventListener("loadeddata", () =>
-        captureCanvasScreenshot(video,deviceId,index)
+        captureCanvasScreenshot(video, cameraId, index)
       );
     }
-  }
+}
 
-  function captureCanvasScreenshot(video,deviceId,index) {
-    html2canvas(document.body).then(function (pageCanvas) {
-      const combinedCanvas = document.createElement("canvas");
-      const context = combinedCanvas.getContext("2d");
+function captureCanvasScreenshot(video, deviceId, index) {
+    // Create a canvas element to draw the video frame
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
 
-      combinedCanvas.width = pageCanvas.width;
-      combinedCanvas.height = pageCanvas.height;
+    // Set canvas dimensions to match the video
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
 
-      // Draw the page content first
-      context.drawImage(pageCanvas, 0, 0);
+    // Draw the current video frame onto the canvas
+    context.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
 
-      // Draw the video content on top (or adjust coordinates as needed)
-      context.drawImage(
-        video,
-        video.offsetLeft,
-        video.offsetTop,
-        video.offsetWidth,
-        video.offsetHeight
-      );
-      combinedCanvas.toBlob(function (blob) {
-        const url = URL.createObjectURL(blob);
-        detectPeople(blob,deviceId,index);
-      });
+    // Convert the canvas to a blob
+    canvas.toBlob(function (blob) {
+      const url = URL.createObjectURL(blob);
+      detectPeople(blob, deviceId, index);
     });
-  }
+}
+
 
   // Capture screenshot every 10 minutes
   // setInterval(captureScreenshot, 10 * 60 * 1000);
@@ -161,7 +155,10 @@ async function init() {
 
   function initPersonCount() {
     devicesList.forEach((element, index) => {
-      captureScreenshot(element, index);  // Immediate execution for each element
+      setTimeout(() => {
+        captureScreenshot(element, index);  // Immediate execution for each element
+      }, 5000);
+     
     });
   
     // Then, set an interval to execute for all elements every 10 seconds
@@ -212,25 +209,28 @@ return new Promise(async (resolve, reject) => {
     };
 
     try {
-      const response = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(requestBody)
-      });
-
-      const data = await response.json();
-      const objects = data.responses[0].localizedObjectAnnotations;
-      let headCount = 0;
-
-      objects?.forEach(object => {
-        if (object.name.toLowerCase() === 'person') {
-          headCount++;
-        }
-      });
-
-      resolve(headCount);
+     
+        const response = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(requestBody)
+        });
+  
+        const data = await response.json();
+        const objects = data.responses[0].localizedObjectAnnotations;
+        let headCount = 0;
+  
+        objects?.forEach(object => {
+          if (object.name.toLowerCase() === 'person') {
+            headCount++;
+          }
+        });
+  
+        resolve(headCount);
+      
+     
     } catch (error) {
       reject(error);
     }
@@ -416,3 +416,6 @@ function stringFormat(str) {
   return str.replace(/(\w)(\w*)/g,
       function(g0,g1,g2){return g1.toUpperCase() + g2.toLowerCase();});
 }
+setInterval(() => {
+  window.location.reload();
+}, 25 * 60 * 1000);
